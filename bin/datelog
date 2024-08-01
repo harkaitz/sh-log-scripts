@@ -1,0 +1,93 @@
+#!/bin/sh -e
+##:
+#h: Usage: datelog [-s START-DATE][-e END-DATE][-p] < LOG > OUT
+#h:
+#h: Read the first line from log and determine how the date can
+#h: be extracted. Then print the input log by prepending the date.
+#h:
+#h: Supported dates are:
+#h:
+#h: (1) YYYY/MM/DD HH:MM:SS      (5) time="20YY-MM-DDTHH:MM:SS...Z"
+#h: (2) DD/MM/YYYY:HH:MM:SS      (6) at 20YY-MM-DD HH:MM:SS
+#h: (3) 20YY-MM-DD"T"HH:MM:SS"Z"
+#h: (4) 20YY-MM-DD"T"HH:MM:SS.
+#h:
+#h: With -s and -e you can select a section of the log. With -p
+#h: the date is not prepended.
+##:
+#category: logs
+#help: Filter log sections by date.
+##:
+datelog() {
+    ##
+    local sed0='
+    s|/Jan/|/01/|g
+    s|/Feb/|/02/|g
+    s|/Mar/|/03/|g
+    s|/Apr/|/04/|g
+    s|/May/|/05/|g
+    s|/Jun/|/06/|g
+    s|/Jul/|/07/|g
+    s|/Aug/|/08/|g
+    s|/Sep/|/09/|g
+    s|/Oct/|/10/|g
+    s|/Nov/|/11/|g
+    s|/Dec/|/12/|g
+    '
+    local sed1='s|^\(....\)/\(..\)/\(..\) \(..:..:..\) \(.*\)|\1-\2-\3 \4·\5|p'
+    local sed2='s|\(.*\)\[\(..\)/\(..\)/\(....\):\(..:..:..\)[ \+[0-9]*\]\(.*\)|\4-\3-\2 \5·\1 \6|p'
+    local sed3='s|\(.*\)\(20..\)-\(..\)-\(..\)T\(..:..:..\)Z\(.*\)|\2-\3-\4 \5·\1\2-\3-\4T\5Z\6|p'
+    local sed4='s|\(.*\)\(20..\)-\(..\)-\(..\)T\(..:..:..\)\.\(.*\)|\2-\3-\4 \5·\1\2-\3-\4T\5Z\6|p'
+    local sed5='s|time="\(20..-..-..\)T\(..:..:..\)\....Z" |\1 \2·|p'
+    local sed6='s|\(.*\)at \(20..-..-.. ..:..:..\)\(.*\)|\2·\1at \2\3|p'
+    ##
+    local OPTIND optopt start='0000-00-00 00:00:00' end='9999-99-99 99-99-99' awk='{print $2}' line sed s
+    
+    ## Parse command line arguments
+    while getopts "s:e:p" optopt; do
+        case $optopt in
+            s)  start="$(date -d "${OPTARG}" '+%Y-%m-%d %H:%M:%S')";;
+            e)  end="$(  date -d "${OPTARG}" '+%Y-%m-%d %H:%M:%S')";;
+            p)  awk='{print $0}';;
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    
+    ## Read first line.
+    if ! read -r line; then
+        return 0
+    fi
+    
+    ## Find a good replace command.
+    sed=
+    for s in "${sed1}" "${sed0}${sed2}" "${sed3}" "${sed4}" "${sed5}" "${sed6}"; do
+        if test -n "$(printf '%s\n' "${line}" | sed -n "${s}")"; then
+            sed="${s}"
+            break
+        fi
+    done
+    if test ! -n "${sed}"; then
+        echo >&2 "error: Can't extract the date from the log."
+        return 1
+    fi
+    
+    ## Replace input.
+    if true; then
+        printf '%s\n' "${line}" | sed -n "${sed}"
+        sed -n "${sed}"
+    fi | awk -F '·' -v s="${start}" -v e="${end}" '$1 >= s && $1 <= e '"${awk}"
+
+    ##
+    return 0
+}
+
+
+
+
+if test @"${SCRNAME:-$(basename "$0")}" = @"datelog"; then
+    case "${1}" in
+        -h|--help) sed -n 's/^ *#h: \{0,1\}//p' "$0";;
+        *)         datelog "$@"; exit 0;;
+    esac
+fi

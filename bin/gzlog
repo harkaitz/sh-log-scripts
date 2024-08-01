@@ -1,0 +1,39 @@
+#!/bin/sh -e
+##:
+#h: Usage: gzlog [-n NUM][-r] LOG
+#h:
+#h: Print LOG file and also LOG.<n>.gz files to standard output.
+##:
+#category: logs
+#help: Extract logs from .log.N.gz format.
+##:
+gzlog() {
+    local OPTIND optopt num=100 log log_dir log_name
+
+    while getopts "n:" optopt; do
+        case $optopt in
+            n)  num="${OPTARG}";;
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    
+    for log in "$@"; do
+        if test ! -f "${log}"; then
+            echo >&2 "error: ${log}: File not found."
+            return 1
+        fi
+        for n in $(seq 1 "${num}" | sort -rn); do
+            if test -f "${log}.${n}.gz"; then
+                gzip -dc "${log}.${n}.gz"
+            fi
+        done
+        cat "${log}"
+    done | sed '/^ *$/d'
+}
+if test @"${SCRNAME:-$(basename "$0")}" = @"gzlog"; then
+    case "${1}" in
+        ''|-h|--help) sed -n 's/^ *#h: \{0,1\}//p' "$0";;
+        *)            gzlog "$@"; exit 0;;
+    esac
+fi
